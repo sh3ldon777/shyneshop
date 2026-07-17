@@ -31,6 +31,33 @@
     transition:opacity .38s ease, transform .48s cubic-bezier(.2,.8,.2,1), visibility 0s;}
   @media (prefers-reduced-motion: reduce){ .screen{transition:opacity .01s, visibility 0s;transform:none;} }
 
+  /* ---- opening choreography ---- */
+  @keyframes riseIn{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:none;}}
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+  @keyframes clipRise{from{clip-path:inset(0 0 100% 0);transform:translateY(10px);}to{clip-path:inset(0 0 -8% 0);transform:none;}}
+  @keyframes glSettle{from{opacity:0;transform:scale(1.14);}to{opacity:1;transform:none;}}
+  @keyframes photoReveal{from{clip-path:inset(0 0 100% 0);transform:scale(1.05);}to{clip-path:inset(0);transform:none;}}
+  #entrance.on #gl{animation:glSettle 1.05s cubic-bezier(.2,.8,.2,1) both;}
+  #entrance.on .wordmark{animation:clipRise .7s .12s cubic-bezier(.2,.8,.2,1) both;}
+  #entrance.on .ent-meta{animation:fadeIn .6s .4s both;}
+  #entrance.on .ent-cta button:nth-child(1){animation:riseIn .5s .5s cubic-bezier(.2,.8,.2,1) both;}
+  #entrance.on .ent-cta button:nth-child(2){animation:riseIn .5s .58s cubic-bezier(.2,.8,.2,1) both;}
+  #entrance.on .ent-cta button:nth-child(3){animation:riseIn .5s .66s cubic-bezier(.2,.8,.2,1) both;}
+  #entrance.on .ent-hint{animation:fadeIn .7s .95s both;}
+  #detail.on .carousel{animation:photoReveal .75s cubic-bezier(.2,.8,.2,1) both;}
+  #detail.on .d-body>*:nth-child(1){animation:riseIn .55s .22s cubic-bezier(.2,.8,.2,1) both;}
+  #detail.on .d-body>*:nth-child(2){animation:riseIn .55s .28s cubic-bezier(.2,.8,.2,1) both;}
+  #detail.on .d-body>*:nth-child(3){animation:riseIn .55s .34s cubic-bezier(.2,.8,.2,1) both;}
+  #detail.on .d-body>*:nth-child(4){animation:riseIn .55s .40s cubic-bezier(.2,.8,.2,1) both;}
+  #detail.on .d-body>*:nth-child(5){animation:riseIn .55s .46s cubic-bezier(.2,.8,.2,1) both;}
+  #detail.on .d-body>*:nth-child(6){animation:riseIn .55s .52s cubic-bezier(.2,.8,.2,1) both;}
+  #detail.on .d-foot{animation:riseIn .5s .5s cubic-bezier(.2,.8,.2,1) both;}
+  .grid .card{animation:riseIn .5s cubic-bezier(.2,.8,.2,1) both;}
+  @media (prefers-reduced-motion: reduce){
+    #entrance.on #gl,#entrance.on .wordmark,#entrance.on .ent-meta,#entrance.on .ent-cta button,#entrance.on .ent-hint,
+    #detail.on .carousel,#detail.on .d-body>*,#detail.on .d-foot,.grid .card{animation:none;}
+  }
+
   /* ---------------- ENTRANCE (fisheye) ---------------- */
   #bg,#gl{position:fixed;inset:0;width:100%;height:100%;display:block;}
   #gl{cursor:grab;touch-action:none;}
@@ -162,6 +189,16 @@
     letter-spacing:.2em;text-transform:uppercase;padding:16px;cursor:pointer;transition:.2s;}
   .d-foot .buy:active{transform:translateY(1px);}
   .d-foot .buy[disabled]{background:transparent;color:var(--muted);border-color:var(--line);cursor:not-allowed;}
+  /* wide / desktop: lay photos out in a row across the width, cap the text column */
+  @media (min-width:760px){
+    .carousel{padding-top:8px;}
+    .slides{scroll-snap-type:none; gap:2px; justify-content:safe center; padding:0 8px;}
+    .slide{flex:0 0 auto; width:auto; height:min(62vh,540px); aspect-ratio:1/1;}
+    .slide .mono-bg{font-size:150px;}
+    .dots{display:none;}
+    .d-body{max-width:720px; margin-left:auto; margin-right:auto; width:100%;}
+    .d-foot{left:50%; right:auto; transform:translateX(-50%); width:100%; max-width:720px;}
+  }
 
   /* ---------------- ADMIN / MODAL ---------------- */
   .fab{position:fixed;right:16px;bottom:calc(var(--safe-bottom) + 18px);z-index:8;width:54px;height:54px;border-radius:50%;
@@ -206,7 +243,7 @@
   <div class="grain"></div>
   <div class="ent-ui">
     <div class="wordmark">Shyne</div>
-    <div class="ent-meta"><b id="entCount">0</b> в наличии<br/>Санкт-Петербург</div>
+    <div class="ent-meta"><b>В наличии в Санкт-Петербурге</b><br/>Доставка по всей России</div>
     <div class="ent-hint" id="entHint">тяни — рассмотри витрину</div>
     <div class="ent-cta">
       <button id="toCatalog">В каталог</button>
@@ -736,7 +773,7 @@ function delItem(){
     products=products.filter(function(x){return x!==it;}); closeForm(); afterDataChange(); toast("Удалено");
   }
 }
-function afterDataChange(){ byId("entCount").textContent=countIn(); setupRange(); renderChips(); renderGrid(); glDirty=true; }
+function afterDataChange(){ setupRange(); renderChips(); renderGrid(); glDirty=true; }
 function countIn(){ return products.filter(function(p){return p.status!=="sold";}).length; }
 function fillSelect(sel,arr,val){ sel.innerHTML=""; arr.forEach(function(o){ var op=document.createElement("option"); op.value=o; op.textContent=o; if(o===val)op.selected=true; sel.appendChild(op); }); }
 
@@ -878,6 +915,17 @@ var FRAG=[
 " gl_FragColor=vec4(rgb,a);",
 "}"].join("\n");
 
+var photoCache={};   // url -> loaded Image (CORS-clean) | "loading" | "error"
+function preloadAtlasPhotos(){
+  products.slice(0,36).forEach(function(p){
+    var pu=p.photos&&p.photos[0]; if(!pu||photoCache[pu])return;
+    photoCache[pu]="loading";
+    var im=new Image(); im.crossOrigin="anonymous";
+    im.onload=function(){ photoCache[pu]=im; if(glReady&&current==="entrance") uploadAtlas(); };
+    im.onerror=function(){ photoCache[pu]="error"; console.warn("atlas photo skipped (CORS/load):",pu); };
+    im.src=pu;
+  });
+}
 function buildAtlasCanvas(){
   var items=products.slice(0,36); atlasN=items.length||1;
   atlasAC=Math.max(2,Math.ceil(Math.sqrt(atlasN)));
@@ -886,20 +934,32 @@ function buildAtlasCanvas(){
   x.fillStyle="#0a0a0b"; x.fillRect(0,0,cv.width,cv.height);
   items.forEach(function(p,i){
     var c=i%atlasAC, rr=(i/atlasAC|0), ox=c*CELL, oy=rr*CELL;
-    var hue=p.hue||"#202024";
-    var g=x.createLinearGradient(ox,oy,ox+CELL,oy+CELL);
-    g.addColorStop(0,hue); g.addColorStop(1,"#0b0b0d"); x.fillStyle=g; x.fillRect(ox,oy,CELL,CELL);
-    x.save(); x.beginPath(); x.rect(ox,oy,CELL,CELL); x.clip();
-    for(var s=0;s<30;s++){ x.strokeStyle="rgba(255,255,255,"+(Math.random()*0.03)+")"; x.beginPath(); var yy=oy+Math.random()*CELL; x.moveTo(ox,yy); x.lineTo(ox+CELL,yy+(Math.random()*16-8)); x.stroke(); }
-    x.restore();
-    x.strokeStyle="rgba(255,255,255,0.09)"; x.strokeRect(ox+8.5,oy+8.5,CELL-17,CELL-17);
-    x.fillStyle="rgba(255,255,255,0.32)"; x.font="600 14px 'SF Mono',monospace"; x.textBaseline="top"; x.fillText(("0"+p.id).slice(-2),ox+20,oy+20);
-    x.save(); x.translate(ox+CELL/2,oy+CELL/2-8); x.scale(0.82,1);
-    x.fillStyle="#EDEDED"; x.font="700 30px 'Helvetica Neue',Arial,sans-serif"; x.textAlign="center"; x.textBaseline="middle";
-    (p.brand.toUpperCase().split(" ")).forEach(function(w,wi,arr){ x.fillText(w,0,(wi-(arr.length-1)/2)*34); });
-    x.restore();
-    x.fillStyle="rgba(236,236,236,0.7)"; x.font="500 14px 'Helvetica Neue',Arial,sans-serif"; x.textAlign="left"; x.textBaseline="alphabetic"; x.fillText(p.name,ox+20,oy+CELL-38);
-    x.fillStyle="#EDEDED"; x.font="600 15px 'SF Mono',monospace"; x.fillText(p.status==="sold"?"Продано":fmt(p.price),ox+20,oy+CELL-18);
+    var pu=p.photos&&p.photos[0], pim=pu?photoCache[pu]:null;
+    if(pim && pim.naturalWidth){
+      // real product photo, centre-cropped to square + "liquid glass" darkening for legibility
+      var iw=pim.naturalWidth, ih=pim.naturalHeight, ss=Math.min(iw,ih);
+      x.drawImage(pim,(iw-ss)/2,(ih-ss)/2,ss,ss,ox,oy,CELL,CELL);
+      x.fillStyle="rgba(9,9,11,0.42)"; x.fillRect(ox,oy,CELL,CELL);
+      var gg=x.createLinearGradient(ox,oy,ox,oy+CELL);
+      gg.addColorStop(0,"rgba(255,255,255,0.06)"); gg.addColorStop(0.45,"rgba(0,0,0,0)"); gg.addColorStop(1,"rgba(0,0,0,0.5)");
+      x.fillStyle=gg; x.fillRect(ox,oy,CELL,CELL);
+    } else {
+      // placeholder swatch (gradient + brushed streaks)
+      var hue=p.hue||"#202024";
+      var g=x.createLinearGradient(ox,oy,ox+CELL,oy+CELL);
+      g.addColorStop(0,hue); g.addColorStop(1,"#0b0b0d"); x.fillStyle=g; x.fillRect(ox,oy,CELL,CELL);
+      x.save(); x.beginPath(); x.rect(ox,oy,CELL,CELL); x.clip();
+      for(var s=0;s<30;s++){ x.strokeStyle="rgba(255,255,255,"+(Math.random()*0.03)+")"; x.beginPath(); var yy=oy+Math.random()*CELL; x.moveTo(ox,yy); x.lineTo(ox+CELL,yy+(Math.random()*16-8)); x.stroke(); }
+      x.restore();
+    }
+    // shared label over ANY tile (photo or swatch): frame, index, brand, name, price, sold
+    x.strokeStyle="rgba(255,255,255,0.12)"; x.strokeRect(ox+8.5,oy+8.5,CELL-17,CELL-17);
+    x.fillStyle="rgba(255,255,255,0.42)"; x.font="600 14px 'SF Mono',monospace"; x.textAlign="left"; x.textBaseline="top"; x.fillText(("0"+p.id).slice(-2),ox+20,oy+20);
+    // bottom-left label: brand eyebrow / product name / price
+    x.textAlign="left"; x.textBaseline="alphabetic";
+    x.fillStyle="rgba(236,236,236,0.58)"; x.font="600 11px 'Helvetica Neue',Arial,sans-serif"; x.fillText(p.brand.toUpperCase(),ox+20,oy+CELL-48);
+    x.fillStyle="#EDEDED"; x.font="600 15px 'Helvetica Neue',Arial,sans-serif"; x.fillText(p.name,ox+20,oy+CELL-28);
+    x.fillStyle="rgba(236,236,236,0.9)"; x.font="600 14px 'SF Mono',monospace"; x.fillText(p.status==="sold"?"Продано":fmt(p.price),ox+20,oy+CELL-11);
     if(p.status==="sold"){ x.save(); x.translate(ox+CELL/2,oy+CELL/2); x.rotate(-0.17);
       x.strokeStyle="rgba(236,236,236,0.85)"; x.lineWidth=2; x.strokeRect(-88,-24,176,48);
       x.fillStyle="rgba(236,236,236,0.92)"; x.font="700 22px 'Helvetica Neue',Arial,sans-serif"; x.textAlign="center"; x.textBaseline="middle"; x.fillText("ПРОДАНО",0,2); x.restore(); }
@@ -940,6 +1000,7 @@ function startGL(){
   if(!glReady){ if(!initGL()) return; resizeGL(); }
   if(glDirty){ uploadAtlas(); glDirty=false; }
   resizeGL();
+  preloadAtlasPhotos();   // load real product photos -> atlas re-uploads when each is ready
   if(!rafId) rafId=requestAnimationFrame(frame);
 }
 function stopGL(){ if(rafId){ cancelAnimationFrame(rafId); rafId=0; } }
@@ -971,7 +1032,6 @@ window.addEventListener("resize",function(){ if(current==="entrance"){ drawStore
 // boot
 show("entrance");
 load(function(){
-  byId("entCount").textContent=countIn();
   afterDataChange();                       // renders grid/chips/range, marks atlas dirty
   applyAdmin();
   if(current==="entrance"){ glDirty=true; startGL(); }   // rebuild fisheye atlas with loaded items
