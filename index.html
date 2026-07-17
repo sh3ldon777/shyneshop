@@ -73,14 +73,15 @@
   .ent-meta b{color:var(--ink);font-weight:500;}
   .nums{position:absolute;left:50%;top:calc(var(--safe-top) + clamp(16px,3vw,26px));transform:translateX(-50%);
     font-size:9px;letter-spacing:.42em;color:rgba(255,255,255,.26);white-space:nowrap;}
-  .ent-cta{position:absolute;left:50%;bottom:calc(var(--safe-bottom) + 24px);transform:translateX(-50%);
-    display:flex;flex-wrap:wrap;gap:9px;justify-content:center;max-width:min(92vw,384px);}
+  .ent-bottom{position:absolute;left:50%;bottom:calc(var(--safe-bottom) + 22px);transform:translateX(-50%);
+    display:flex;flex-direction:column;align-items:center;gap:14px;width:max-content;max-width:94vw;pointer-events:none;}
+  .ent-bottom>*{pointer-events:auto;}
+  .ent-cta{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;max-width:min(94vw,384px);}
   .ent-cta button{background:var(--ink);color:#0A0A0A;border:1px solid var(--ink);font-weight:700;font-size:11px;
     letter-spacing:.16em;text-transform:uppercase;padding:12px 18px;cursor:pointer;transition:.2s;white-space:nowrap;}
   .ent-cta button.ghost{background:transparent;color:var(--ink);}
   .ent-cta button:active{transform:translateY(1px);}
-  .ent-hint{position:absolute;left:50%;bottom:calc(var(--safe-bottom) + 74px);transform:translateX(-50%);
-    font-size:9.5px;letter-spacing:.3em;text-transform:uppercase;color:var(--muted);transition:opacity .6s;}
+  .ent-hint{font-size:9.5px;letter-spacing:.3em;text-transform:uppercase;color:var(--muted);transition:opacity .6s;}
   .ent-hint.hide{opacity:0;}
 
   /* ---------------- CATALOG ---------------- */
@@ -244,11 +245,13 @@
   <div class="ent-ui">
     <div class="wordmark">Shyne</div>
     <div class="ent-meta"><b>В наличии в Санкт-Петербурге</b><br/>Доставка по всей России</div>
-    <div class="ent-hint" id="entHint">тяни — рассмотри витрину</div>
-    <div class="ent-cta">
-      <button id="toCatalog">В каталог</button>
-      <button class="ghost" id="entSearch">Поиск</button>
-      <button class="ghost" id="entSeller">Написать продавцу</button>
+    <div class="ent-bottom">
+      <div class="ent-hint" id="entHint">тяни — рассмотри витрину</div>
+      <div class="ent-cta">
+        <button id="toCatalog">В каталог</button>
+        <button class="ghost" id="entSearch">Поиск</button>
+        <button class="ghost" id="entSeller">Написать продавцу</button>
+      </div>
     </div>
   </div>
 </section>
@@ -893,7 +896,7 @@ var VERT="attribute vec2 p;void main(){gl_Position=vec4(p,0.0,1.0);}";
 var FRAG=[
 "precision highp float;",
 "uniform vec2 uRes;uniform vec2 uPan;uniform float uZoom;uniform float uK;uniform float uGap;",
-"uniform sampler2D uTex;uniform float uAC;uniform float uN;",
+"uniform sampler2D uTex;uniform sampler2D uPerm;uniform float uAC;uniform float uN;uniform float uPermP;",
 "float hash(vec2 c){return fract(sin(dot(c,vec2(127.1,311.7)))*43758.5453);}",
 "void main(){",
 " float asp=uRes.x/uRes.y;",
@@ -906,7 +909,9 @@ var FRAG=[
 " float g=uGap;",
 " if(f.x<g||f.x>1.0-g||f.y<g||f.y>1.0-g){ gl_FragColor=vec4(0.0); return; }",
 " vec2 img=(f-g)/(1.0-2.0*g);",
-" float idx=mod(cell.x*5.0+cell.y*13.0, uN);",   // deterministic: matches JS picker exactly
+" vec2 cm=mod(cell, uPermP);",
+" float raw=floor(texture2D(uPerm,(cm+0.5)/uPermP).r*255.0+0.5);",
+" float idx=mod(raw, uN);",   // scattered (permutation LUT) yet identical to JS picker
 " float col=mod(idx,uAC); float row=floor(idx/uAC);",
 " float aU=(col+img.x)/uAC; float aV=1.0-(row+1.0-img.y)/uAC;",
 " vec3 rgb=texture2D(uTex,vec2(aU,aV)).rgb;",
@@ -976,14 +981,35 @@ function initGL(){
   var loc=gl.getAttribLocation(prog,"p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
   tex=gl.createTexture();
   gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA); gl.clearColor(0,0,0,0);
-  U={res:u("uRes"),pan:u("uPan"),zoom:u("uZoom"),k:u("uK"),gap:u("uGap"),ac:u("uAC"),n:u("uN")};
+  U={res:u("uRes"),pan:u("uPan"),zoom:u("uZoom"),k:u("uK"),gap:u("uGap"),ac:u("uAC"),n:u("uN"),tex:u("uTex"),perm:u("uPerm"),permP:u("uPermP")};
   gl.uniform1f(U.zoom,ZOOM); gl.uniform1f(U.k,K); gl.uniform1f(U.gap,GAP);
+  gl.uniform1i(U.tex,0); gl.uniform1i(U.perm,1);
+  uploadPerm();
   glReady=true; return true;
 }
 function u(n){ return gl.getUniformLocation(prog,n); }
+var PERM_P=23, permArr=null, permTex=null;
+function buildPerm(){
+  permArr=new Uint8Array(PERM_P*PERM_P);
+  for(var y=0;y<PERM_P;y++)for(var xx=0;xx<PERM_P;xx++){
+    var h=Math.sin(xx*12.9898+y*78.233)*43758.5453; h=h-Math.floor(h);
+    permArr[y*PERM_P+xx]=Math.floor(h*256)&255;   // baked in JS -> GPU never recomputes (no float drift)
+  }
+}
+function uploadPerm(){
+  if(!permArr) buildPerm();
+  if(!permTex) permTex=gl.createTexture();
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,permTex);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT,1); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.LUMINANCE,PERM_P,PERM_P,0,gl.LUMINANCE,gl.UNSIGNED_BYTE,permArr);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.uniform1f(U.permP,PERM_P);
+  gl.activeTexture(gl.TEXTURE0);
+}
 function uploadAtlas(){
   if(!glReady) return;
-  gl.bindTexture(gl.TEXTURE_2D,tex); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,tex); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
   gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,buildAtlasCanvas());
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
@@ -1023,7 +1049,9 @@ function pickAt(sx,sy){
   var r=Math.hypot(cx,cy), rn=r/R, warp=1+K*rn*rn;
   var wx=cx*warp*ZOOM+pan.x, wy=cy*warp*ZOOM+pan.y;
   var cellx=Math.floor(wx), celly=Math.floor(wy);
-  var idx=(((cellx*5+celly*13)%atlasN)+atlasN)%atlasN;   // same formula as the shader
+  if(!permArr) buildPerm();
+  var cmx=((cellx%PERM_P)+PERM_P)%PERM_P, cmy=((celly%PERM_P)+PERM_P)%PERM_P;
+  var idx=permArr[cmy*PERM_P+cmx]%atlasN;   // same permutation LUT as the shader
   var p=products[idx];
   if(p) openDetail(p);
 }
