@@ -249,7 +249,6 @@
       <div class="ent-hint" id="entHint">тяни — рассмотри витрину</div>
       <div class="ent-cta">
         <button id="toCatalog">В каталог</button>
-        <button class="ghost" id="entSearch">Поиск</button>
         <button class="ghost" id="entSeller">Написать продавцу</button>
       </div>
     </div>
@@ -782,7 +781,6 @@ function fillSelect(sel,arr,val){ sel.innerHTML=""; arr.forEach(function(o){ var
 
 /* ---------------- events ---------------- */
 byId("toCatalog").onclick=function(){ show("catalog"); };
-byId("entSearch").onclick=function(){ show("catalog"); setTimeout(function(){ byId("q").focus(); },60); };
 byId("entSeller").onclick=writeSeller;
 byId("catHome").onclick=function(){ show("entrance"); };
 byId("dBack").onclick=function(){ show("catalog"); };
