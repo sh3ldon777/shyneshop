@@ -950,12 +950,17 @@ var FRAG=[
 "}"].join("\n");
 
 var photoCache={};   // url -> loaded Image (CORS-clean) | "loading" | "error"
+var atlasRebuildTimer=null;
+function scheduleAtlasRebuild(){          // coalesce many photo loads into ONE atlas rebuild (no jank)
+  if(atlasRebuildTimer) return;
+  atlasRebuildTimer=setTimeout(function(){ atlasRebuildTimer=null; if(glReady&&current==="entrance") uploadAtlas(); }, 220);
+}
 function preloadAtlasPhotos(){
   products.slice(0,36).forEach(function(p){
     var pu=p.photos&&p.photos[0]; if(!pu||photoCache[pu])return;
     photoCache[pu]="loading";
     var im=new Image(); im.crossOrigin="anonymous";
-    im.onload=function(){ photoCache[pu]=im; if(glReady&&current==="entrance") uploadAtlas(); };
+    im.onload=function(){ photoCache[pu]=im; scheduleAtlasRebuild(); };
     im.onerror=function(){ photoCache[pu]="error"; console.warn("atlas photo skipped (CORS/load):",pu); };
     im.src=pu;
   });
